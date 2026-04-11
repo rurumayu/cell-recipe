@@ -1,5 +1,10 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { signOut } from '@/lib/supabase-auth'
 import Link from 'next/link'
+import type { User } from '@supabase/supabase-js'
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   cell_sourcing: { label: '細胞の調達', color: '#2e86c1' },
@@ -13,47 +18,114 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   advanced: '上級',
 }
 
-export const revalidate = 0
+type Recipe = {
+  id: string
+  title: string
+  description: string | null
+  difficulty: string | null
+  created_at: string
+}
 
-export default async function Home() {
-  const { data: recipes } = await supabase
-    .from('recipes')
-    .select('*')
-    .order('created_at', { ascending: false })
+export default function Home() {
+  const [user, setUser] = useState<User | null>(null)
+  const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [categoryMap, setCategoryMap] = useState<Record<string, string[]>>({})
+  const [loading, setLoading] = useState(true)
 
-  const { data: categories } = await supabase
-    .from('recipe_categories')
-    .select('*')
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
 
-  const categoryMap: Record<string, string[]> = {}
-  categories?.forEach(c => {
-    if (!categoryMap[c.recipe_id]) categoryMap[c.recipe_id] = []
-    categoryMap[c.recipe_id].push(c.category)
-  })
+      const { data: recipesData } = await supabase
+        .from('recipes')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      const { data: categoriesData } = await supabase
+        .from('recipe_categories')
+        .select('*')
+
+      if (recipesData) setRecipes(recipesData)
+
+      const map: Record<string, string[]> = {}
+      categoriesData?.forEach(c => {
+        if (!map[c.recipe_id]) map[c.recipe_id] = []
+        map[c.recipe_id].push(c.category)
+      })
+      setCategoryMap(map)
+      setLoading(false)
+    }
+    init()
+  }, [])
+
+  const handleSignOut = async () => {
+    await signOut()
+    window.location.reload()
+  }
+
+  if (loading) {
+    return <main style={{ padding: '3rem', textAlign: 'center', fontFamily: 'sans-serif' }}>読み込み中...</main>
+  }
 
   return (
     <main style={{ maxWidth: 800, margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
+      {/* ヘッダー */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h1 style={{ fontSize: '2rem', color: '#1a5632', margin: 0 }}>🧫 Cell Recipe</h1>
           <p style={{ color: '#666', margin: 0 }}>細胞農業プロトコル共有プラットフォーム</p>
         </div>
-        <Link
-          href="/recipes/new"
-          style={{
-            background: '#1a5632',
-            color: '#fff',
-            padding: '0.6rem 1.2rem',
-            borderRadius: 8,
-            textDecoration: 'none',
-            fontWeight: 700,
-          }}
-        >
-          + 新しいレシピ
-        </Link>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {user ? (
+            <>
+              <Link
+                href="/recipes/new"
+                style={{
+                  background: '#1a5632', color: '#fff', padding: '0.5rem 1rem',
+                  borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem',
+                }}
+              >
+                + 新しいレシピ
+              </Link>
+              <button
+                onClick={handleSignOut}
+                style={{
+                  background: 'none', border: '1px solid #ccc', padding: '0.5rem 1rem',
+                  borderRadius: 8, cursor: 'pointer', fontSize: '0.85rem', color: '#666',
+                }}
+              >
+                ログアウト
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                style={{
+                  background: '#1a5632', color: '#fff', padding: '0.5rem 1rem',
+                  borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem',
+                }}
+              >
+                ログイン
+              </Link>
+              <Link
+                href="/signup"
+                style={{
+                  background: 'none', border: '1px solid #1a5632', color: '#1a5632',
+                  padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none',
+                  fontWeight: 600, fontSize: '0.9rem',
+                }}
+              >
+                新規登録
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
-      {!recipes || recipes.length === 0 ? (
+      {/* レシピ一覧 */}
+      {recipes.length === 0 ? (
         <p style={{ color: '#999', textAlign: 'center', padding: '3rem 0' }}>
           まだレシピがありません。最初のレシピを投稿しましょう！
         </p>
@@ -63,45 +135,33 @@ export default async function Home() {
             <div
               key={recipe.id}
               style={{
-                border: '1px solid #e0e8e2',
-                borderRadius: 12,
-                padding: '1.2rem 1.5rem',
-                background: '#fff',
+                border: '1px solid #e0e8e2', borderRadius: 12,
+                padding: '1.2rem 1.5rem', background: '#fff',
               }}
             >
               <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0' }}>{recipe.title}</h2>
-
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 {(categoryMap[recipe.id] || []).map(cat => {
                   const info = CATEGORY_LABELS[cat]
                   return info ? (
-                    <span
-                      key={cat}
-                      style={{
-                        background: info.color,
-                        color: '#fff',
-                        padding: '0.15rem 0.6rem',
-                        borderRadius: 12,
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                      }}
-                    >
+                    <span key={cat} style={{
+                      background: info.color, color: '#fff',
+                      padding: '0.15rem 0.6rem', borderRadius: 12,
+                      fontSize: '0.75rem', fontWeight: 600,
+                    }}>
                       {info.label}
                     </span>
                   ) : null
                 })}
                 {recipe.difficulty && (
                   <span style={{
-                    background: '#f0f0f0',
-                    padding: '0.15rem 0.6rem',
-                    borderRadius: 12,
-                    fontSize: '0.75rem',
+                    background: '#f0f0f0', padding: '0.15rem 0.6rem',
+                    borderRadius: 12, fontSize: '0.75rem',
                   }}>
                     {DIFFICULTY_LABELS[recipe.difficulty] || recipe.difficulty}
                   </span>
                 )}
               </div>
-
               {recipe.description && (
                 <p style={{ color: '#555', fontSize: '0.9rem', margin: 0 }}>
                   {recipe.description.length > 100
