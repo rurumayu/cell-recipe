@@ -132,44 +132,52 @@ export default function Home() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {recipes.map(recipe => (
-            <div
+            <Link
               key={recipe.id}
-              style={{
-                border: '1px solid #e0e8e2', borderRadius: 12,
-                padding: '1.2rem 1.5rem', background: '#fff',
-              }}
+              href={`/recipes/${recipe.id}`}
+              style={{ textDecoration: 'none', color: 'inherit' }}
             >
-              <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0' }}>{recipe.title}</h2>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                {(categoryMap[recipe.id] || []).map(cat => {
-                  const info = CATEGORY_LABELS[cat]
-                  return info ? (
-                    <span key={cat} style={{
-                      background: info.color, color: '#fff',
-                      padding: '0.15rem 0.6rem', borderRadius: 12,
-                      fontSize: '0.75rem', fontWeight: 600,
+              <div
+                style={{
+                  border: '1px solid #e0e8e2', borderRadius: 12,
+                  padding: '1.2rem 1.5rem', background: '#fff',
+                  cursor: 'pointer', transition: 'box-shadow 0.2s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)')}
+                onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+              >
+                <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0' }}>{recipe.title}</h2>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                  {(categoryMap[recipe.id] || []).map(cat => {
+                    const info = CATEGORY_LABELS[cat]
+                    return info ? (
+                      <span key={cat} style={{
+                        background: info.color, color: '#fff',
+                        padding: '0.15rem 0.6rem', borderRadius: 12,
+                        fontSize: '0.75rem', fontWeight: 600,
+                      }}>
+                        {info.label}
+                      </span>
+                    ) : null
+                  })}
+                  {recipe.difficulty && (
+                    <span style={{
+                      background: '#f0f0f0', padding: '0.15rem 0.6rem',
+                      borderRadius: 12, fontSize: '0.75rem',
                     }}>
-                      {info.label}
+                      {DIFFICULTY_LABELS[recipe.difficulty] || recipe.difficulty}
                     </span>
-                  ) : null
-                })}
-                {recipe.difficulty && (
-                  <span style={{
-                    background: '#f0f0f0', padding: '0.15rem 0.6rem',
-                    borderRadius: 12, fontSize: '0.75rem',
-                  }}>
-                    {DIFFICULTY_LABELS[recipe.difficulty] || recipe.difficulty}
-                  </span>
+                  )}
+                </div>
+                {recipe.description && (
+                  <p style={{ color: '#555', fontSize: '0.9rem', margin: 0 }}>
+                    {recipe.description.length > 100
+                      ? recipe.description.slice(0, 100) + '...'
+                      : recipe.description}
+                  </p>
                 )}
               </div>
-              {recipe.description && (
-                <p style={{ color: '#555', fontSize: '0.9rem', margin: 0 }}>
-                  {recipe.description.length > 100
-                    ? recipe.description.slice(0, 100) + '...'
-                    : recipe.description}
-                </p>
-              )}
-            </div>
+            </Link>
           ))}
         </div>
       )}

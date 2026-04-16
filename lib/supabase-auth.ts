@@ -4,18 +4,16 @@ export async function signUp(email: string, password: string, username: string) 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      data: {
+        username: username,
+      },
+    },
   })
   if (error) return { user: null, error }
 
+  // サインアップ後に自動ログイン
   if (data.user) {
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: data.user.id,
-      username,
-      display_name: username,
-    })
-    if (profileError) return { user: null, error: profileError }
-
-    // サインアップ後に自動ログイン
     await supabase.auth.signInWithPassword({ email, password })
   }
 
