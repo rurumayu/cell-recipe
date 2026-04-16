@@ -14,6 +14,9 @@ export async function signUp(email: string, password: string, username: string) 
       display_name: username,
     })
     if (profileError) return { user: null, error: profileError }
+
+    // サインアップ後に自動ログイン
+    await supabase.auth.signInWithPassword({ email, password })
   }
 
   return { user: data.user, error: null }

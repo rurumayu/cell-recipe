@@ -29,7 +29,7 @@ export default function SignUpPage() {
       setErrorMessage(error.message)
       setStatus('error')
     } else {
-      setStatus('success')
+      window.location.href = '/'
     }
   }
 
