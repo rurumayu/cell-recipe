@@ -41,6 +41,8 @@ export default function Home() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([])
   const [categoryMap, setCategoryMap] = useState<Record<string, string[]>>({})
+  const [favCountMap, setFavCountMap] = useState<Record<string, number>>({})
+  const [reportCountMap, setReportCountMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
   const [searchText, setSearchText] = useState('')
@@ -55,7 +57,8 @@ export default function Home() {
       const { data: recipesData } = await supabase
         .from('recipes')
         .select('*')
-        .eq('status', 'published').order('created_at', { ascending: false })
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
 
       const { data: categoriesData } = await supabase
         .from('recipe_categories')
@@ -64,6 +67,28 @@ export default function Home() {
       if (recipesData) {
         setRecipes(recipesData)
         setFilteredRecipes(recipesData)
+
+        // お気に入り件数を取得
+        const { data: favsData } = await supabase
+          .from('favorites')
+          .select('recipe_id')
+
+        const fMap: Record<string, number> = {}
+        favsData?.forEach(f => {
+          fMap[f.recipe_id] = (fMap[f.recipe_id] || 0) + 1
+        })
+        setFavCountMap(fMap)
+
+        // うちレポ件数を取得
+        const { data: reportsData } = await supabase
+          .from('uchi_reports')
+          .select('recipe_id')
+
+        const rMap: Record<string, number> = {}
+        reportsData?.forEach(r => {
+          rMap[r.recipe_id] = (rMap[r.recipe_id] || 0) + 1
+        })
+        setReportCountMap(rMap)
       }
 
       const map: Record<string, string[]> = {}
@@ -79,7 +104,6 @@ export default function Home() {
 
   useEffect(() => {
     let result = [...recipes]
-
     if (searchText.trim()) {
       const query = searchText.toLowerCase()
       result = result.filter(r =>
@@ -87,36 +111,20 @@ export default function Home() {
         (r.description && r.description.toLowerCase().includes(query))
       )
     }
-
     if (selectedCategory) {
-      result = result.filter(r =>
-        (categoryMap[r.id] || []).includes(selectedCategory)
-      )
+      result = result.filter(r => (categoryMap[r.id] || []).includes(selectedCategory))
     }
-
     if (selectedExpType) {
       result = result.filter(r => r.experiment_type === selectedExpType)
     }
-
     setFilteredRecipes(result)
   }, [searchText, selectedCategory, selectedExpType, recipes, categoryMap])
 
-  const handleSignOut = async () => {
-    await signOut()
-    window.location.reload()
-  }
-
-  const clearFilters = () => {
-    setSearchText('')
-    setSelectedCategory(null)
-    setSelectedExpType(null)
-  }
-
+  const handleSignOut = async () => { await signOut(); window.location.reload() }
+  const clearFilters = () => { setSearchText(''); setSelectedCategory(null); setSelectedExpType(null) }
   const hasActiveFilters = searchText || selectedCategory || selectedExpType
 
-  if (loading) {
-    return <main style={{ padding: '3rem', textAlign: 'center', fontFamily: 'sans-serif' }}>読み込み中...</main>
-  }
+  if (loading) return <main style={{ padding: '3rem', textAlign: 'center', fontFamily: 'sans-serif' }}>読み込み中...</main>
 
   return (
     <main style={{ maxWidth: 800, margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
@@ -129,46 +137,14 @@ export default function Home() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {user ? (
             <>
-              <Link
-                href="/recipes/new"
-                style={{
-                  background: '#1a5632', color: '#fff', padding: '0.5rem 1rem',
-                  borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem',
-                }}
-              >
-                + 新しいレシピ</Link><Link href="/mypage" style={{ background: "none", border: "1px solid #1a5632", color: "#1a5632", padding: "0.5rem 1rem", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: "0.9rem" }}>マイページ
-              </Link>
-              <button
-                onClick={handleSignOut}
-                style={{
-                  background: 'none', border: '1px solid #ccc', padding: '0.5rem 1rem',
-                  borderRadius: 8, cursor: 'pointer', fontSize: '0.85rem', color: '#666',
-                }}
-              >
-                ログアウト
-              </button>
+              <Link href="/recipes/new" style={{ background: '#1a5632', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}>+ 新しいレシピ</Link>
+              <Link href="/mypage" style={{ background: 'none', border: '1px solid #1a5632', color: '#1a5632', padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>マイページ</Link>
+              <button onClick={handleSignOut} style={{ background: 'none', border: '1px solid #ccc', padding: '0.5rem 1rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>ログアウト</button>
             </>
           ) : (
             <>
-              <Link
-                href="/login"
-                style={{
-                  background: '#1a5632', color: '#fff', padding: '0.5rem 1rem',
-                  borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem',
-                }}
-              >
-                ログイン
-              </Link>
-              <Link
-                href="/signup"
-                style={{
-                  background: 'none', border: '1px solid #1a5632', color: '#1a5632',
-                  padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none',
-                  fontWeight: 600, fontSize: '0.9rem',
-                }}
-              >
-                新規登録
-              </Link>
+              <Link href="/login" style={{ background: '#1a5632', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}>ログイン</Link>
+              <Link href="/signup" style={{ background: 'none', border: '1px solid #1a5632', color: '#1a5632', padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>新規登録</Link>
             </>
           )}
         </div>
@@ -176,160 +152,68 @@ export default function Home() {
 
       {/* 検索・フィルター */}
       <div style={{ background: '#f8faf8', border: '1px solid #e0e8e2', borderRadius: 12, padding: '1rem 1.2rem', marginBottom: '1.5rem' }}>
-        <input
-          type="text"
-          value={searchText}
-          onChange={e => setSearchText(e.target.value)}
-          placeholder="🔍 レシピを検索..."
-          style={{
-            width: '100%', padding: '0.6rem 0.8rem', border: '1px solid #ddd',
-            borderRadius: 8, fontSize: '0.95rem', marginBottom: '0.8rem', outline: 'none',
-          }}
-        />
-
+        <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="🔍 レシピを検索..."
+          style={{ width: '100%', padding: '0.6rem 0.8rem', border: '1px solid #ddd', borderRadius: 8, fontSize: '0.95rem', marginBottom: '0.8rem', outline: 'none' }} />
         <div style={{ marginBottom: '0.6rem' }}>
           <span style={{ fontSize: '0.8rem', color: '#888', marginRight: 8 }}>カテゴリー：</span>
           {Object.entries(CATEGORY_LABELS).map(([value, info]) => (
-            <button
-              key={value}
-              onClick={() => setSelectedCategory(selectedCategory === value ? null : value)}
-              style={{
-                padding: '0.25rem 0.7rem', borderRadius: 14, marginRight: 6,
-                border: `1.5px solid ${info.color}`,
-                background: selectedCategory === value ? info.color : '#fff',
-                color: selectedCategory === value ? '#fff' : info.color,
-                cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem',
-              }}
-            >
-              {info.label}
-            </button>
+            <button key={value} onClick={() => setSelectedCategory(selectedCategory === value ? null : value)}
+              style={{ padding: '0.25rem 0.7rem', borderRadius: 14, marginRight: 6, border: `1.5px solid ${info.color}`, background: selectedCategory === value ? info.color : '#fff', color: selectedCategory === value ? '#fff' : info.color, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>{info.label}</button>
           ))}
         </div>
-
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
           <span style={{ fontSize: '0.8rem', color: '#888', marginRight: 2 }}>実験タイプ：</span>
           {EXPERIMENT_TYPES.map(t => (
-            <button
-              key={t.value}
-              onClick={() => setSelectedExpType(selectedExpType === t.value ? null : t.value)}
-              style={{
-                padding: '0.25rem 0.7rem', borderRadius: 14,
-                border: '1.5px solid #aaa',
-                background: selectedExpType === t.value ? '#1a5632' : '#fff',
-                color: selectedExpType === t.value ? '#fff' : '#555',
-                cursor: 'pointer', fontWeight: 500, fontSize: '0.8rem',
-              }}
-            >
-              {t.label}
-            </button>
+            <button key={t.value} onClick={() => setSelectedExpType(selectedExpType === t.value ? null : t.value)}
+              style={{ padding: '0.25rem 0.7rem', borderRadius: 14, border: '1.5px solid #aaa', background: selectedExpType === t.value ? '#1a5632' : '#fff', color: selectedExpType === t.value ? '#fff' : '#555', cursor: 'pointer', fontWeight: 500, fontSize: '0.8rem' }}>{t.label}</button>
           ))}
         </div>
-
         {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            style={{
-              marginTop: 8, padding: '0.25rem 0.8rem', background: 'none',
-              border: '1px solid #ccc', borderRadius: 8, color: '#888',
-              cursor: 'pointer', fontSize: '0.8rem',
-            }}
-          >
-            ✕ フィルターをリセット
-          </button>
+          <button onClick={clearFilters} style={{ marginTop: 8, padding: '0.25rem 0.8rem', background: 'none', border: '1px solid #ccc', borderRadius: 8, color: '#888', cursor: 'pointer', fontSize: '0.8rem' }}>✕ フィルターをリセット</button>
         )}
       </div>
 
-      {hasActiveFilters && (
-        <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.8rem' }}>
-          {filteredRecipes.length} 件のレシピが見つかりました
-        </p>
-      )}
+      {hasActiveFilters && <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.8rem' }}>{filteredRecipes.length} 件のレシピが見つかりました</p>}
 
       {/* レシピ一覧 */}
       {filteredRecipes.length === 0 ? (
         <p style={{ color: '#999', textAlign: 'center', padding: '3rem 0' }}>
-          {hasActiveFilters
-            ? '条件に一致するレシピが見つかりませんでした'
-            : 'まだレシピがありません。最初のレシピを投稿しましょう！'}
+          {hasActiveFilters ? '条件に一致するレシピが見つかりませんでした' : 'まだレシピがありません。最初のレシピを投稿しましょう！'}
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {filteredRecipes.map(recipe => (
-            <Link
-              key={recipe.id}
-              href={`/recipes/${recipe.id}`}
-              style={{ textDecoration: 'none', color: 'inherit' }}
-            >
-              <div
-                style={{
-                  border: '1px solid #e0e8e2', borderRadius: 12,
-                  padding: '1.2rem 1.5rem', background: '#fff',
-                  cursor: 'pointer', transition: 'box-shadow 0.2s',
-                  display: 'flex', gap: '1rem', alignItems: 'flex-start',
-                }}
+            <Link key={recipe.id} href={`/recipes/${recipe.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{ border: '1px solid #e0e8e2', borderRadius: 12, padding: '1.2rem 1.5rem', background: '#fff', cursor: 'pointer', transition: 'box-shadow 0.2s', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}
                 onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)')}
-                onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
-              >
+                onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}>
                 {/* サムネイル */}
                 {recipe.cover_image_url ? (
-                  <img
-                    src={recipe.cover_image_url}
-                    alt=""
-                    style={{
-                      width: 100, height: 100, objectFit: 'cover',
-                      borderRadius: 8, flexShrink: 0,
-                    }}
-                  />
+                  <img src={recipe.cover_image_url} alt="" style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
                 ) : (
-                  <div style={{
-                    width: 100, height: 100, borderRadius: 8, flexShrink: 0,
-                    background: '#f0f4f1', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', fontSize: '2rem', color: '#ccc',
-                  }}>
-                    🧫
-                  </div>
+                  <div style={{ width: 100, height: 100, borderRadius: 8, flexShrink: 0, background: '#f0f4f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: '#ccc' }}>🧫</div>
                 )}
-
                 {/* テキスト情報 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h2 style={{ fontSize: '1.1rem', margin: '0 0 0.4rem 0' }}>{recipe.title}</h2>
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: '0.4rem' }}>
                     {(categoryMap[recipe.id] || []).map(cat => {
                       const info = CATEGORY_LABELS[cat]
-                      return info ? (
-                        <span key={cat} style={{
-                          background: info.color, color: '#fff',
-                          padding: '0.1rem 0.5rem', borderRadius: 10,
-                          fontSize: '0.7rem', fontWeight: 600,
-                        }}>
-                          {info.label}
-                        </span>
-                      ) : null
+                      return info ? <span key={cat} style={{ background: info.color, color: '#fff', padding: '0.1rem 0.5rem', borderRadius: 10, fontSize: '0.7rem', fontWeight: 600 }}>{info.label}</span> : null
                     })}
-                    {recipe.difficulty && (
-                      <span style={{
-                        background: '#f0f0f0', padding: '0.1rem 0.5rem',
-                        borderRadius: 10, fontSize: '0.7rem',
-                      }}>
-                        {DIFFICULTY_LABELS[recipe.difficulty] || recipe.difficulty}
-                      </span>
-                    )}
-                    {recipe.experiment_type && (
-                      <span style={{
-                        background: '#f0f0f0', padding: '0.1rem 0.5rem',
-                        borderRadius: 10, fontSize: '0.7rem',
-                      }}>
-                        {EXPERIMENT_TYPES.find(t => t.value === recipe.experiment_type)?.label || recipe.experiment_type}
-                      </span>
-                    )}
+                    {recipe.difficulty && <span style={{ background: '#f0f0f0', padding: '0.1rem 0.5rem', borderRadius: 10, fontSize: '0.7rem' }}>{DIFFICULTY_LABELS[recipe.difficulty] || recipe.difficulty}</span>}
+                    {recipe.experiment_type && <span style={{ background: '#f0f0f0', padding: '0.1rem 0.5rem', borderRadius: 10, fontSize: '0.7rem' }}>{EXPERIMENT_TYPES.find(t => t.value === recipe.experiment_type)?.label || recipe.experiment_type}</span>}
                   </div>
                   {recipe.description && (
-                    <p style={{ color: '#555', fontSize: '0.85rem', margin: 0 }}>
-                      {recipe.description.length > 80
-                        ? recipe.description.slice(0, 80) + '...'
-                        : recipe.description}
+                    <p style={{ color: '#555', fontSize: '0.85rem', margin: '0 0 0.4rem 0' }}>
+                      {recipe.description.length > 80 ? recipe.description.slice(0, 80) + '...' : recipe.description}
                     </p>
                   )}
+                  {/* お気に入り・うちレポ件数 */}
+                  <div style={{ display: 'flex', gap: 12, fontSize: '0.8rem', color: '#999' }}>
+                    <span>❤️ {favCountMap[recipe.id] || 0}</span>
+                    <span>📝 {reportCountMap[recipe.id] || 0} レポ</span>
+                  </div>
                 </div>
               </div>
             </Link>
