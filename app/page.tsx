@@ -55,7 +55,7 @@ export default function Home() {
       const { data: recipesData } = await supabase
         .from('recipes')
         .select('*')
-        .order('created_at', { ascending: false })
+        .eq('status', 'published').order('created_at', { ascending: false })
 
       const { data: categoriesData } = await supabase
         .from('recipe_categories')
@@ -136,7 +136,7 @@ export default function Home() {
                   borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem',
                 }}
               >
-                + 新しいレシピ
+                + 新しいレシピ</Link><Link href="/mypage" style={{ background: "none", border: "1px solid #1a5632", color: "#1a5632", padding: "0.5rem 1rem", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: "0.9rem" }}>マイページ
               </Link>
               <button
                 onClick={handleSignOut}
