@@ -32,6 +32,26 @@ const EQUIPMENT_LEVELS = [
 type Material = { name: string; amount: string }
 type Step = { content: string; imageFile: File | null; imagePreview: string }
 
+async function uploadImage(file: File, path: string): Promise<string | null> {
+  const fileExt = file.name.split('.').pop()
+  const fileName = `${path}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
+
+  const { error } = await supabase.storage
+    .from('recipe-images')
+    .upload(fileName, file)
+
+  if (error) {
+    console.error('Upload error:', error)
+    return null
+  }
+
+  const { data } = supabase.storage
+    .from('recipe-images')
+    .getPublicUrl(fileName)
+
+  return data.publicUrl
+}
+
 export default function NewRecipePage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
@@ -40,12 +60,15 @@ export default function NewRecipePage() {
   const [difficulty, setDifficulty] = useState('')
   const [experimentType, setExperimentType] = useState('')
   const [equipmentLevel, setEquipmentLevel] = useState('')
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [materials, setMaterials] = useState<Material[]>([{ name: '', amount: '' }])
   const [steps, setSteps] = useState<Step[]>([{ content: '', imageFile: null, imagePreview: '' }])
   const [results, setResults] = useState('')
   const [tips, setTips] = useState('')
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null)
+  const [coverImagePreview, setCoverImagePreview] = useState('')
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
+  const [uploadProgress, setUploadProgress] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
@@ -60,12 +83,6 @@ export default function NewRecipePage() {
     }
     checkAuth()
   }, [])
-
-  const toggleCategory = (value: string) => {
-    setSelectedCategories(prev =>
-      prev.includes(value) ? prev.filter(c => c !== value) : [...prev, value]
-    )
-  }
 
   const updateMaterial = (index: number, field: keyof Material, value: string) => {
     const updated = [...materials]
@@ -98,14 +115,24 @@ export default function NewRecipePage() {
     setSteps(updated)
   }
 
+  const handleCoverImage = (file: File | null) => {
+    if (file) {
+      setCoverImageFile(file)
+      setCoverImagePreview(URL.createObjectURL(file))
+    } else {
+      setCoverImageFile(null)
+      setCoverImagePreview('')
+    }
+  }
+
   const handleSubmit = async () => {
     if (!title.trim()) {
       setErrorMessage('タイトルを入力してください')
       setStatus('error')
       return
     }
-    if (selectedCategories.length === 0) {
-      setErrorMessage('カテゴリーを1つ以上選択してください')
+    if (!selectedCategory) {
+      setErrorMessage('カテゴリーを選択してください')
       setStatus('error')
       return
     }
@@ -117,13 +144,33 @@ export default function NewRecipePage() {
 
     setStatus('saving')
 
+    let coverImageUrl = null
+    if (coverImageFile) {
+      setUploadProgress('カバー画像をアップロード中...')
+      coverImageUrl = await uploadImage(coverImageFile, `covers/${userId}`)
+    }
+
+    const stepsData = []
+    const validSteps = steps.filter(s => s.content.trim())
+    for (let i = 0; i < validSteps.length; i++) {
+      const step = validSteps[i]
+      let stepImageUrl = null
+      if (step.imageFile) {
+        setUploadProgress(`手順${i + 1}の画像をアップロード中...`)
+        stepImageUrl = await uploadImage(step.imageFile, `steps/${userId}`)
+      }
+      stepsData.push({
+        order: i + 1,
+        content: step.content.trim(),
+        image_url: stepImageUrl,
+      })
+    }
+
+    setUploadProgress('レシピを保存中...')
+
     const materialsData = materials
       .filter(m => m.name.trim())
       .map(m => ({ name: m.name.trim(), amount: m.amount.trim() }))
-
-    const stepsData = steps
-      .filter(s => s.content.trim())
-      .map((s, i) => ({ order: i + 1, content: s.content.trim() }))
 
     const { data: recipe, error: recipeError } = await supabase
       .from('recipes')
@@ -139,6 +186,7 @@ export default function NewRecipePage() {
         tips,
         status: 'draft',
         author_id: userId,
+        cover_image_url: coverImageUrl,
       })
       .select()
       .single()
@@ -149,14 +197,14 @@ export default function NewRecipePage() {
       return
     }
 
-    if (recipe && selectedCategories.length > 0) {
-      const categoryRows = selectedCategories.map(cat => ({
+    if (recipe && selectedCategory) {
+      await supabase.from('recipe_categories').insert({
         recipe_id: recipe.id,
-        category: cat,
-      }))
-      await supabase.from('recipe_categories').insert(categoryRows)
+        category: selectedCategory,
+      })
     }
 
+    setUploadProgress('')
     setStatus('success')
   }
 
@@ -190,22 +238,53 @@ export default function NewRecipePage() {
         </div>
       ) : (
         <>
+          {/* タイトル */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ fontWeight: 700, display: 'block', marginBottom: 4 }}>タイトル *</label>
             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
               placeholder="例：低コスト培地での筋芽細胞増殖プロトコル" style={inputStyle} />
           </div>
 
+          {/* カバー画像 */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>カテゴリー（複数選択可）*</label>
+            <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>カバー画像</label>
+            {coverImagePreview ? (
+              <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+                <img src={coverImagePreview} alt="カバー画像プレビュー"
+                  style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 10, border: '1px solid #e0e0e0' }} />
+                <button onClick={() => handleCoverImage(null)}
+                  style={{
+                    position: 'absolute', top: -8, right: -8,
+                    background: '#e74c3c', color: '#fff', border: 'none',
+                    borderRadius: '50%', width: 24, height: 24,
+                    fontSize: '0.8rem', cursor: 'pointer', lineHeight: '24px', padding: 0,
+                  }}>×</button>
+              </div>
+            ) : (
+              <label style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '2px dashed #ccc', borderRadius: 10, padding: '2rem',
+                cursor: 'pointer', color: '#999', fontSize: '0.9rem',
+              }}>
+                📷 クリックしてカバー画像を選択
+                <input type="file" accept="image/*" style={{ display: 'none' }}
+                  onChange={e => handleCoverImage(e.target.files?.[0] || null)} />
+              </label>
+            )}
+          </div>
+
+          {/* カテゴリー（単一選択） */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>カテゴリー *</label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {CATEGORIES.map(cat => (
-                <button key={cat.value} onClick={() => toggleCategory(cat.value)}
+                <button key={cat.value}
+                  onClick={() => setSelectedCategory(selectedCategory === cat.value ? null : cat.value)}
                   style={{
                     padding: '0.5rem 1rem', borderRadius: 20,
                     border: `2px solid ${cat.color}`,
-                    background: selectedCategories.includes(cat.value) ? cat.color : '#fff',
-                    color: selectedCategories.includes(cat.value) ? '#fff' : cat.color,
+                    background: selectedCategory === cat.value ? cat.color : '#fff',
+                    color: selectedCategory === cat.value ? '#fff' : cat.color,
                     cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem',
                   }}>
                   {cat.label}
@@ -214,6 +293,7 @@ export default function NewRecipePage() {
             </div>
           </div>
 
+          {/* 説明 */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ fontWeight: 700, display: 'block', marginBottom: 4 }}>概要説明</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)}
@@ -221,6 +301,7 @@ export default function NewRecipePage() {
               rows={3} style={{ ...inputStyle, resize: 'vertical' as const }} />
           </div>
 
+          {/* 難易度・タイプ・設備 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: '1.5rem' }}>
             <div>
               <label style={{ fontWeight: 700, display: 'block', marginBottom: 4, fontSize: '0.9rem' }}>難易度</label>
@@ -248,6 +329,7 @@ export default function NewRecipePage() {
             </div>
           </div>
 
+          {/* 材料 */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>材料・試薬・機材</label>
             <div style={{ border: '1px solid #e0e0e0', borderRadius: 10, overflow: 'hidden' }}>
@@ -273,6 +355,7 @@ export default function NewRecipePage() {
             </button>
           </div>
 
+          {/* 手順 */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>手順</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -313,6 +396,7 @@ export default function NewRecipePage() {
             </button>
           </div>
 
+          {/* 結果 */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ fontWeight: 700, display: 'block', marginBottom: 4 }}>結果</label>
             <textarea value={results} onChange={e => setResults(e.target.value)}
@@ -320,6 +404,7 @@ export default function NewRecipePage() {
               rows={3} style={{ ...inputStyle, resize: 'vertical' as const }} />
           </div>
 
+          {/* コツ */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ fontWeight: 700, display: 'block', marginBottom: 4 }}>考察・コツ</label>
             <textarea value={tips} onChange={e => setTips(e.target.value)}
@@ -329,6 +414,9 @@ export default function NewRecipePage() {
 
           {status === 'error' && (
             <p style={{ color: 'red', marginBottom: '1rem' }}>❌ {errorMessage}</p>
+          )}
+          {uploadProgress && (
+            <p style={{ color: '#1a5632', marginBottom: '1rem', fontSize: '0.9rem' }}>⏳ {uploadProgress}</p>
           )}
 
           <button onClick={handleSubmit} disabled={status === 'saving'}

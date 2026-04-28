@@ -1,6 +1,12 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { useParams } from 'next/navigation'
+import UchiReportForm from './UchiReportForm'
+import UchiReportList from './UchiReportList'
+import type { User } from '@supabase/supabase-js'
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   cell_sourcing: { label: '細胞の調達', color: '#2e86c1' },
@@ -28,62 +34,114 @@ const EQUIPMENT_LEVEL_LABELS: Record<string, string> = {
   professional: '研究機関レベル',
 }
 
-export const revalidate = 0
-
 type Material = { name: string; amount: string }
-type Step = { order: number; content: string }
+type Step = { order: number; content: string; image_url?: string }
 
-export default async function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+type Recipe = {
+  id: string
+  title: string
+  description: string | null
+  difficulty: string | null
+  experiment_type: string | null
+  equipment_level: string | null
+  materials: Material[]
+  steps: Step[]
+  results: string | null
+  tips: string | null
+  cover_image_url: string | null
+  author_id: string
+  created_at: string
+}
 
-  const { data: recipe, error } = await supabase
-    .from('recipes')
-    .select('*')
-    .eq('id', id)
-    .single()
+export default function RecipeDetailPage() {
+  const params = useParams()
+  const id = params.id as string
 
-  if (error || !recipe) {
-    notFound()
+  const [recipe, setRecipe] = useState<Recipe | null>(null)
+  const [categories, setCategories] = useState<string[]>([])
+  const [authorName, setAuthorName] = useState('不明')
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [reportRefreshKey, setReportRefreshKey] = useState(0)
+  const [showReportForm, setShowReportForm] = useState(false)
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+
+      const { data: recipeData, error } = await supabase
+        .from('recipes')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      if (error || !recipeData) {
+        setLoading(false)
+        return
+      }
+      setRecipe(recipeData)
+
+      const { data: catData } = await supabase
+        .from('recipe_categories')
+        .select('category')
+        .eq('recipe_id', id)
+      setCategories(catData?.map(c => c.category) || [])
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, display_name')
+        .eq('id', recipeData.author_id)
+        .single()
+      setAuthorName(profile?.display_name || profile?.username || '不明')
+
+      setLoading(false)
+    }
+    init()
+  }, [id])
+
+  if (loading) {
+    return <main style={{ padding: '3rem', textAlign: 'center', fontFamily: 'sans-serif' }}>読み込み中...</main>
   }
 
-  const { data: categories } = await supabase
-    .from('recipe_categories')
-    .select('category')
-    .eq('recipe_id', id)
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('username, display_name')
-    .eq('id', recipe.author_id)
-    .single()
+  if (!recipe) {
+    return (
+      <main style={{ padding: '3rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
+        <p>レシピが見つかりませんでした</p>
+        <Link href="/" style={{ color: '#1a5632' }}>トップに戻る</Link>
+      </main>
+    )
+  }
 
   const materials: Material[] = recipe.materials || []
   const steps: Step[] = recipe.steps || []
 
   return (
     <main style={{ maxWidth: 760, margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
-      {/* 戻るリンク */}
       <Link href="/" style={{ color: '#1a5632', textDecoration: 'none', fontSize: '0.9rem' }}>
         ← レシピ一覧に戻る
       </Link>
 
-      {/* タイトル */}
-      <h1 style={{ fontSize: '1.8rem', marginTop: '1rem', marginBottom: '0.5rem', color: '#1a5632' }}>
+      {recipe.cover_image_url && (
+        <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+          <img src={recipe.cover_image_url} alt={recipe.title}
+            style={{ width: '100%', maxHeight: 400, objectFit: 'cover', borderRadius: 12 }} />
+        </div>
+      )}
+
+      <h1 style={{ fontSize: '1.8rem', marginTop: recipe.cover_image_url ? '0.5rem' : '1rem', marginBottom: '0.5rem', color: '#1a5632' }}>
         {recipe.title}
       </h1>
 
-      {/* メタ情報 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '1rem' }}>
-        {categories?.map(c => {
-          const info = CATEGORY_LABELS[c.category]
+        {categories.map(cat => {
+          const info = CATEGORY_LABELS[cat]
           return info ? (
-            <span key={c.category} style={{
+            <span key={cat} style={{
               background: info.color, color: '#fff',
               padding: '0.2rem 0.7rem', borderRadius: 12,
               fontSize: '0.8rem', fontWeight: 600,
-            }}>
-              {info.label}
-            </span>
+            }}>{info.label}</span>
           ) : null
         })}
         {recipe.difficulty && (
@@ -103,20 +161,16 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
         )}
       </div>
 
-      {/* 投稿者・日時 */}
       <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '1.5rem' }}>
-        投稿者：{profile?.display_name || profile?.username || '不明'}
-        　|　{new Date(recipe.created_at).toLocaleDateString('ja-JP')}
+        投稿者：{authorName}　|　{new Date(recipe.created_at).toLocaleDateString('ja-JP')}
       </div>
 
-      {/* 概要 */}
       {recipe.description && (
         <div style={{ marginBottom: '2rem' }}>
           <p style={{ fontSize: '1rem', lineHeight: 1.7, color: '#333' }}>{recipe.description}</p>
         </div>
       )}
 
-      {/* 材料 */}
       {materials.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.2rem', color: '#1a5632', marginBottom: '0.8rem', paddingBottom: '0.3rem', borderBottom: '2px solid #e0e8e2' }}>
@@ -138,13 +192,12 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
         </div>
       )}
 
-      {/* 手順 */}
       {steps.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.2rem', color: '#1a5632', marginBottom: '0.8rem', paddingBottom: '0.3rem', borderBottom: '2px solid #e0e8e2' }}>
             手順
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {steps.map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <div style={{
@@ -152,19 +205,22 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
                   background: '#1a5632', color: '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '0.85rem', fontWeight: 700, flexShrink: 0,
-                }}>
-                  {step.order || i + 1}
+                }}>{step.order || i + 1}</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '0.95rem', lineHeight: 1.7, color: '#333', margin: 0, paddingTop: 4 }}>
+                    {step.content}
+                  </p>
+                  {step.image_url && (
+                    <img src={step.image_url} alt={`手順${step.order || i + 1}`}
+                      style={{ marginTop: 8, maxWidth: '100%', maxHeight: 300, borderRadius: 8, border: '1px solid #e0e0e0' }} />
+                  )}
                 </div>
-                <p style={{ fontSize: '0.95rem', lineHeight: 1.7, color: '#333', margin: 0, paddingTop: 4 }}>
-                  {step.content}
-                </p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 結果 */}
       {recipe.results && (
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.2rem', color: '#1a5632', marginBottom: '0.8rem', paddingBottom: '0.3rem', borderBottom: '2px solid #e0e8e2' }}>
@@ -174,7 +230,6 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
         </div>
       )}
 
-      {/* 考察・コツ */}
       {recipe.tips && (
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.2rem', color: '#1a5632', marginBottom: '0.8rem', paddingBottom: '0.3rem', borderBottom: '2px solid #e0e8e2' }}>
@@ -183,6 +238,51 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
           <p style={{ fontSize: '0.95rem', lineHeight: 1.7, color: '#333' }}>{recipe.tips}</p>
         </div>
       )}
+
+      {/* ===== うちレポセクション ===== */}
+      <div style={{ marginTop: '3rem', borderTop: '3px solid #1a5632', paddingTop: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.3rem', color: '#1a5632', margin: 0 }}>
+            📝 うちレポ
+          </h2>
+          {user && (
+            <button
+              onClick={() => setShowReportForm(!showReportForm)}
+              style={{
+                padding: '0.4rem 1rem', borderRadius: 8, cursor: 'pointer',
+                fontWeight: 700, fontSize: '0.85rem',
+                background: showReportForm ? '#fff' : '#1a5632',
+                color: showReportForm ? '#1a5632' : '#fff',
+                border: '2px solid #1a5632',
+              }}>
+              {showReportForm ? '閉じる' : 'うちレポを書く'}
+            </button>
+          )}
+          {!user && (
+            <Link href="/login" style={{
+              padding: '0.4rem 1rem', borderRadius: 8,
+              background: '#1a5632', color: '#fff',
+              textDecoration: 'none', fontWeight: 700, fontSize: '0.85rem',
+            }}>
+              ログインしてレポートを書く
+            </Link>
+          )}
+        </div>
+
+        {showReportForm && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <UchiReportForm
+              recipeId={recipe.id}
+              onSubmitted={() => {
+                setShowReportForm(false)
+                setReportRefreshKey(k => k + 1)
+              }}
+            />
+          </div>
+        )}
+
+        <UchiReportList recipeId={recipe.id} refreshKey={reportRefreshKey} />
+      </div>
     </main>
   )
 }

@@ -32,6 +32,7 @@ type Recipe = {
   description: string | null
   difficulty: string | null
   experiment_type: string | null
+  cover_image_url: string | null
   created_at: string
 }
 
@@ -42,7 +43,6 @@ export default function Home() {
   const [categoryMap, setCategoryMap] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
 
-  // フィルター状態
   const [searchText, setSearchText] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedExpType, setSelectedExpType] = useState<string | null>(null)
@@ -77,11 +77,9 @@ export default function Home() {
     init()
   }, [])
 
-  // フィルタリング処理
   useEffect(() => {
     let result = [...recipes]
 
-    // テキスト検索
     if (searchText.trim()) {
       const query = searchText.toLowerCase()
       result = result.filter(r =>
@@ -90,14 +88,12 @@ export default function Home() {
       )
     }
 
-    // カテゴリーフィルター
     if (selectedCategory) {
       result = result.filter(r =>
         (categoryMap[r.id] || []).includes(selectedCategory)
       )
     }
 
-    // 実験タイプフィルター
     if (selectedExpType) {
       result = result.filter(r => r.experiment_type === selectedExpType)
     }
@@ -180,7 +176,6 @@ export default function Home() {
 
       {/* 検索・フィルター */}
       <div style={{ background: '#f8faf8', border: '1px solid #e0e8e2', borderRadius: 12, padding: '1rem 1.2rem', marginBottom: '1.5rem' }}>
-        {/* テキスト検索 */}
         <input
           type="text"
           value={searchText}
@@ -188,12 +183,10 @@ export default function Home() {
           placeholder="🔍 レシピを検索..."
           style={{
             width: '100%', padding: '0.6rem 0.8rem', border: '1px solid #ddd',
-            borderRadius: 8, fontSize: '0.95rem', marginBottom: '0.8rem',
-            outline: 'none',
+            borderRadius: 8, fontSize: '0.95rem', marginBottom: '0.8rem', outline: 'none',
           }}
         />
 
-        {/* カテゴリーフィルター */}
         <div style={{ marginBottom: '0.6rem' }}>
           <span style={{ fontSize: '0.8rem', color: '#888', marginRight: 8 }}>カテゴリー：</span>
           {Object.entries(CATEGORY_LABELS).map(([value, info]) => (
@@ -213,7 +206,6 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 実験タイプフィルター */}
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
           <span style={{ fontSize: '0.8rem', color: '#888', marginRight: 2 }}>実験タイプ：</span>
           {EXPERIMENT_TYPES.map(t => (
@@ -233,7 +225,6 @@ export default function Home() {
           ))}
         </div>
 
-        {/* フィルターリセット */}
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
@@ -248,7 +239,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* 検索結果数 */}
       {hasActiveFilters && (
         <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.8rem' }}>
           {filteredRecipes.length} 件のレシピが見つかりました
@@ -275,48 +265,72 @@ export default function Home() {
                   border: '1px solid #e0e8e2', borderRadius: 12,
                   padding: '1.2rem 1.5rem', background: '#fff',
                   cursor: 'pointer', transition: 'box-shadow 0.2s',
+                  display: 'flex', gap: '1rem', alignItems: 'flex-start',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)')}
                 onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
               >
-                <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0' }}>{recipe.title}</h2>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                  {(categoryMap[recipe.id] || []).map(cat => {
-                    const info = CATEGORY_LABELS[cat]
-                    return info ? (
-                      <span key={cat} style={{
-                        background: info.color, color: '#fff',
-                        padding: '0.15rem 0.6rem', borderRadius: 12,
-                        fontSize: '0.75rem', fontWeight: 600,
+                {/* サムネイル */}
+                {recipe.cover_image_url ? (
+                  <img
+                    src={recipe.cover_image_url}
+                    alt=""
+                    style={{
+                      width: 100, height: 100, objectFit: 'cover',
+                      borderRadius: 8, flexShrink: 0,
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 100, height: 100, borderRadius: 8, flexShrink: 0,
+                    background: '#f0f4f1', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: '2rem', color: '#ccc',
+                  }}>
+                    🧫
+                  </div>
+                )}
+
+                {/* テキスト情報 */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 style={{ fontSize: '1.1rem', margin: '0 0 0.4rem 0' }}>{recipe.title}</h2>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                    {(categoryMap[recipe.id] || []).map(cat => {
+                      const info = CATEGORY_LABELS[cat]
+                      return info ? (
+                        <span key={cat} style={{
+                          background: info.color, color: '#fff',
+                          padding: '0.1rem 0.5rem', borderRadius: 10,
+                          fontSize: '0.7rem', fontWeight: 600,
+                        }}>
+                          {info.label}
+                        </span>
+                      ) : null
+                    })}
+                    {recipe.difficulty && (
+                      <span style={{
+                        background: '#f0f0f0', padding: '0.1rem 0.5rem',
+                        borderRadius: 10, fontSize: '0.7rem',
                       }}>
-                        {info.label}
+                        {DIFFICULTY_LABELS[recipe.difficulty] || recipe.difficulty}
                       </span>
-                    ) : null
-                  })}
-                  {recipe.difficulty && (
-                    <span style={{
-                      background: '#f0f0f0', padding: '0.15rem 0.6rem',
-                      borderRadius: 12, fontSize: '0.75rem',
-                    }}>
-                      {DIFFICULTY_LABELS[recipe.difficulty] || recipe.difficulty}
-                    </span>
-                  )}
-                  {recipe.experiment_type && (
-                    <span style={{
-                      background: '#f0f0f0', padding: '0.15rem 0.6rem',
-                      borderRadius: 12, fontSize: '0.75rem',
-                    }}>
-                      {EXPERIMENT_TYPES.find(t => t.value === recipe.experiment_type)?.label || recipe.experiment_type}
-                    </span>
+                    )}
+                    {recipe.experiment_type && (
+                      <span style={{
+                        background: '#f0f0f0', padding: '0.1rem 0.5rem',
+                        borderRadius: 10, fontSize: '0.7rem',
+                      }}>
+                        {EXPERIMENT_TYPES.find(t => t.value === recipe.experiment_type)?.label || recipe.experiment_type}
+                      </span>
+                    )}
+                  </div>
+                  {recipe.description && (
+                    <p style={{ color: '#555', fontSize: '0.85rem', margin: 0 }}>
+                      {recipe.description.length > 80
+                        ? recipe.description.slice(0, 80) + '...'
+                        : recipe.description}
+                    </p>
                   )}
                 </div>
-                {recipe.description && (
-                  <p style={{ color: '#555', fontSize: '0.9rem', margin: 0 }}>
-                    {recipe.description.length > 100
-                      ? recipe.description.slice(0, 100) + '...'
-                      : recipe.description}
-                  </p>
-                )}
               </div>
             </Link>
           ))}
