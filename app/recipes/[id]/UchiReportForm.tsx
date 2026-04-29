@@ -12,7 +12,7 @@ async function uploadImage(file: File, path: string): Promise<string | null> {
   return data.publicUrl
 }
 
-export default function UchiReportForm({ recipeId, onSubmitted }: { recipeId: string; onSubmitted: () => void }) {
+export default function UchiReportForm({ recipeId, userId, onSubmitted }: { recipeId: string; userId: string; onSubmitted: () => void }) {
   const [body, setBody] = useState('')
   const [success, setSuccess] = useState<boolean>(true)
   const [modifications, setModifications] = useState('')
