@@ -1,5 +1,7 @@
 'use client'
 
+import Header from '@/components/Header'
+
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
