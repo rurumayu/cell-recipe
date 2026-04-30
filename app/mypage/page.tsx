@@ -1,6 +1,5 @@
 'use client'
 
-import Header from '@/components/Header'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
